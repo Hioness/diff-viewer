@@ -235,8 +235,10 @@
 
         .overlay-body {
             flex: 1;
-            overflow: auto;
+            overflow: hidden;
             padding: 0.5rem 0.75rem;
+            display: flex;
+            flex-direction: column;
         }
 
         /* TOGGLE GROUP */
@@ -278,6 +280,46 @@
             line-height: 1.5;
         }
 
+        #diff-render-target {
+            flex: 1;
+            overflow: auto;
+            min-height: 0;
+        }
+
+        .diff-panels {
+            display: flex;
+            gap: 0.75rem;
+            min-height: 0;
+        }
+
+        .diff-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: var(--bw) solid var(--border);
+            min-width: 0;
+            background: var(--pane-bg);
+        }
+
+        .panel-header {
+            border-bottom: var(--bw) solid var(--border);
+            padding: 0.35rem 0.6rem;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            background: var(--bg);
+            color: var(--fg);
+        }
+
+        .diff-panel .diff-table {
+            border: none;
+        }
+
+        .diff-unified {
+            border: var(--bw) solid var(--border);
+        }
+
         .diff-table th {
             text-align: left;
             padding: 0.3rem 0.6rem;
@@ -293,6 +335,7 @@
             width: 45px;
             border-right: var(--bw) solid var(--border-dim);
             text-align: right;
+            padding-left: 0;
             padding-right: 0.5rem;
         }
 
@@ -300,7 +343,8 @@
             padding: 0.1rem 0.3rem;
             vertical-align: top;
             white-space: pre-wrap;
-            word-break: break-all;
+            overflow-wrap: break-word;
+            word-break: normal;
         }
 
         .diff-table tr {
@@ -312,7 +356,7 @@
             font-size: 0.7rem;
             color: #555;
             text-align: right;
-            padding-right: 0.5rem;
+            padding: 0.1rem 0.5rem 0.1rem 0;
             user-select: none;
             border-right: var(--bw) solid var(--border-dim);
             width: 45px;
@@ -569,10 +613,8 @@
             }
 
             function renderSplitView() {
-                let html = `<table class="diff-table"><thead><tr>
-                    <th class="col-num">ln</th><th>original</th>
-                    <th class="col-num">ln</th><th>modified</th>
-                </tr></thead><tbody>`;
+                let leftHtml = '<table class="diff-table"><thead><tr><th class="col-num">ln</th><th>content</th></tr></thead><tbody>';
+                let rightHtml = '<table class="diff-table"><thead><tr><th class="col-num">ln</th><th>content</th></tr></thead><tbody>';
 
                 for (const row of alignedRows) {
                     const L = row.left, R = row.right;
@@ -592,19 +634,54 @@
                     else if (R.type === 'unchanged') rContent = escapeHtml(R.text);
                     if (!rContent && R.type !== 'empty') rContent = ' ';
 
-                    html += `<tr>
-                        <td class="line-num ${lc}">${L.lineNum ?? ''}</td>
-                        <td class="${lc}"><pre style="margin:0;white-space:pre-wrap;">${lContent}</pre></td>
-                        <td class="line-num ${rc}">${R.lineNum ?? ''}</td>
-                        <td class="${rc}"><pre style="margin:0;white-space:pre-wrap;">${rContent}</pre></td>
-                    </tr>`;
+                    leftHtml += `<tr><td class="line-num ${lc}">${L.lineNum ?? ''}</td><td class="${lc}"><pre style="margin:0;white-space:pre-wrap;">${lContent}</pre></td></tr>`;
+                    rightHtml += `<tr><td class="line-num ${rc}">${R.lineNum ?? ''}</td><td class="${rc}"><pre style="margin:0;white-space:pre-wrap;">${rContent}</pre></td></tr>`;
                 }
-                html += '</tbody></table>';
-                diffRenderTarget.innerHTML = html;
+
+                leftHtml += '</tbody></table>';
+                rightHtml += '</tbody></table>';
+
+                diffRenderTarget.innerHTML = `
+                    <div class="diff-panels">
+                        <div class="diff-panel">
+                            <div class="panel-header">original</div>
+                            ${leftHtml}
+                        </div>
+                        <div class="diff-panel">
+                            <div class="panel-header">modified</div>
+                            ${rightHtml}
+                        </div>
+                    </div>
+                `;
+
+                requestAnimationFrame(() => {
+                    syncRowHeights();
+                });
+            }
+
+            function syncRowHeights() {
+                const panels = diffRenderTarget.querySelectorAll('.diff-panel');
+                if (panels.length !== 2) return;
+
+                const leftRows = panels[0].querySelectorAll('.diff-table tbody tr');
+                const rightRows = panels[1].querySelectorAll('.diff-table tbody tr');
+                const count = Math.max(leftRows.length, rightRows.length);
+
+                for (let i = 0; i < count; i++) {
+                    const lRow = leftRows[i];
+                    const rRow = rightRows[i];
+                    if (lRow && rRow) {
+                        lRow.style.height = '';
+                        rRow.style.height = '';
+                        const maxHeight = Math.max(lRow.getBoundingClientRect().height, rRow.getBoundingClientRect().height);
+                        lRow.style.height = maxHeight + 'px';
+                        rRow.style.height = maxHeight + 'px';
+                    }
+                }
             }
 
             function renderUnifiedView() {
-                let html = `<table class="diff-table"><thead><tr>
+                let html = `<table class="diff-table diff-unified"><thead><tr>
                     <th class="col-num">old</th><th class="col-num">new</th><th>content</th>
                 </tr></thead><tbody>`;
 
@@ -657,6 +734,14 @@
 
             btnViewSplit.addEventListener('click', () => { currentViewMode = 'split'; updateDisplay(); });
             btnViewUnified.addEventListener('click', () => { currentViewMode = 'unified'; updateDisplay(); });
+
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    if (currentViewMode === 'split') syncRowHeights();
+                }, 100);
+            });
 
             function openOverlay() {
                 computeDiffData();
