@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>diff-viewer</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #1a1a1a;
+            --fg: #ffffff;
+            --muted: #888;
+            --border: #ffffff;
+            --border-dim: #444;
+            --pane-bg: #111;
+
+            --added-bg: #1a2a1a;
+            --added-fg: #bbf7d0;
+            --added-word-bg: #14532d;
+            --removed-bg: #2a1a1a;
+            --removed-fg: #fecaca;
+            --removed-word-bg: #521818;
+
+            --bw: 1px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.4;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER: title left, buttons right */
+        header {
+            border-bottom: var(--bw) solid var(--border);
+            padding: 0.6rem 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title {
+            font-size: 1rem;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            text-transform: uppercase;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        /* BUTTONS */
+        button {
+            background: var(--bg);
+            color: var(--fg);
+            border: var(--bw) solid var(--border);
+            padding: 0.25rem 0.6rem;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-weight: bold;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            box-shadow: 2px 2px 0 var(--border);
+            border-radius: 0;
+            outline: none;
+        }
+
+        button:hover {
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0 var(--border);
+            background: var(--fg);
+            color: var(--bg);
+        }
+
+        button:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        button:focus-visible {
+            outline: 2px dashed var(--fg);
+            outline-offset: 2px;
+        }
+
+        /* MAIN */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0.5rem 0.75rem;
+            gap: 0.5rem;
+        }
+
+        /* EDITORS */
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            flex: 1;
+            min-height: 350px;
+        }
+
+        @media (max-width: 900px) {
+            .editor-container {
+                grid-template-columns: 1fr;
+                min-height: 500px;
+            }
+        }
+
+        .editor-pane {
+            display: flex;
+            flex-direction: column;
+            border: var(--bw) solid var(--border);
+            background: var(--pane-bg);
+        }
+
+        .pane-header {
+            border-bottom: var(--bw) solid var(--border);
+            padding: 0.35rem 0.6rem;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg);
+        }
+
+        .pane-meta {
+            font-size: 0.7rem;
+            color: var(--muted);
+            font-weight: normal;
+            text-transform: none;
+        }
+
+        .pane-textarea-wrapper {
+            flex: 1;
+            display: flex;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            min-height: 280px;
+            background: transparent;
+            color: var(--fg);
+            border: none;
+            padding: 0.6rem;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+        }
+
+        textarea::placeholder {
+            color: var(--border-dim);
+        }
+
+        .editor-pane:focus-within {
+            border-color: var(--fg);
+        }
+
+        /* VIEW DIFF BUTTON */
+        .trigger-bar {
+            display: flex;
+            justify-content: center;
+            padding: 0.4rem 0 0.6rem;
+        }
+
+        .btn-large-diff {
+            font-size: 0.9rem;
+            padding: 0.4rem 1.8rem;
+            box-shadow: 3px 3px 0 var(--border);
+        }
+
+        .btn-large-diff:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 var(--border);
+        }
+
+        .btn-large-diff:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        /* OVERLAY */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+        }
+
+        .overlay-header {
+            border-bottom: var(--bw) solid var(--border);
+            padding: 0.4rem 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg);
+            z-index: 1010;
+        }
+
+        .overlay-title {
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.9rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .overlay-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .overlay-body {
+            flex: 1;
+            overflow: auto;
+            padding: 0.5rem 0.75rem;
+        }
+
+        /* TOGGLE GROUP */
+        .btn-group {
+            display: inline-flex;
+            border: var(--bw) solid var(--border);
+            box-shadow: 2px 2px 0 var(--border);
+        }
+
+        .btn-group button {
+            box-shadow: none;
+            border: none;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.7rem;
+        }
+
+        .btn-group button:not(:last-child) {
+            border-right: var(--bw) solid var(--border);
+        }
+
+        .btn-group button.active {
+            background: var(--fg);
+            color: var(--bg);
+        }
+
+        .btn-group button:hover {
+            transform: none;
+            background: var(--fg);
+            color: var(--bg);
+        }
+
+        /* DIFF TABLE */
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .diff-table th {
+            text-align: left;
+            padding: 0.3rem 0.6rem;
+            border-bottom: var(--bw) solid var(--border);
+            background: var(--bg);
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+
+        .diff-table th.col-num {
+            width: 45px;
+            border-right: var(--bw) solid var(--border-dim);
+            text-align: right;
+            padding-right: 0.5rem;
+        }
+
+        .diff-table td {
+            padding: 0.1rem 0.3rem;
+            vertical-align: top;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .diff-table tr {
+            border-bottom: 1px solid #222;
+        }
+
+        .line-num {
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.7rem;
+            color: #555;
+            text-align: right;
+            padding-right: 0.5rem;
+            user-select: none;
+            border-right: var(--bw) solid var(--border-dim);
+            width: 45px;
+        }
+
+        /* Diff states */
+        .line-added {
+            background-color: var(--added-bg);
+            color: var(--added-fg);
+        }
+
+        .line-added .line-num {
+            background-color: rgba(74, 222, 128, 0.08);
+            color: #2d8a54;
+        }
+
+        .line-removed {
+            background-color: var(--removed-bg);
+            color: var(--removed-fg);
+        }
+
+        .line-removed .line-num {
+            background-color: rgba(248, 113, 113, 0.06);
+            color: #a33;
+        }
+
+        .line-empty {
+            background-color: #151515;
+            color: #333;
+        }
+
+        .line-empty .line-num {
+            background-color: #111;
+            color: #222;
+        }
+
+        .line-unchanged {
+            background-color: transparent;
+        }
+
+        /* Word-level highlights */
+        .word-added {
+            background-color: var(--added-word-bg);
+            color: var(--added-fg);
+            font-weight: bold;
+            border-bottom: 1px dashed var(--added-fg);
+        }
+
+        .word-removed {
+            background-color: var(--removed-word-bg);
+            color: var(--removed-fg);
+            text-decoration: line-through;
+            font-weight: bold;
+            border-bottom: 1px dashed var(--removed-fg);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.2.0/diff.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <div class="header-title">diff-viewer</div>
+        </div>
+        <div>
+            <button id="btn-swap">Swap</button>
+            <button id="btn-clear">Clear</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="editor-container">
+            <div class="editor-pane" id="pane-original">
+                <div class="pane-header">
+                    <span>original</span>
+                    <span class="pane-meta" id="original-stats">0 chars · 0 words</span>
+                </div>
+                <div class="pane-textarea-wrapper">
+                    <textarea id="text-original" placeholder="paste original text..."></textarea>
+                </div>
+            </div>
+
+            <div class="editor-pane" id="pane-modified">
+                <div class="pane-header">
+                    <span>modified</span>
+                    <span class="pane-meta" id="modified-stats">0 chars · 0 words</span>
+                </div>
+                <div class="pane-textarea-wrapper">
+                    <textarea id="text-modified" placeholder="paste modified text..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="trigger-bar">
+            <button id="btn-view-diff" class="btn-large-diff">view diff</button>
+        </div>
+    </main>
+
+    <!-- FULLSCREEN OVERLAY -->
+    <div class="overlay" id="diff-overlay" role="dialog" aria-modal="true">
+        <div class="overlay-header">
+            <div class="overlay-title">diff</div>
+            <div class="overlay-controls">
+                <div class="btn-group">
+                    <button id="btn-view-split" class="active">split</button>
+                    <button id="btn-view-unified">unified</button>
+                </div>
+                <button id="btn-copy-diff">copy</button>
+                <button id="btn-close-overlay">close</button>
+            </div>
+        </div>
+        <div class="overlay-body">
+            <div id="diff-render-target"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textOriginal = document.getElementById('text-original');
+            const textModified = document.getElementById('text-modified');
+            const originalStats = document.getElementById('original-stats');
+            const modifiedStats = document.getElementById('modified-stats');
+
+            const btnViewDiff = document.getElementById('btn-view-diff');
+            const btnSwap = document.getElementById('btn-swap');
+            const btnClear = document.getElementById('btn-clear');
+
+            const diffOverlay = document.getElementById('diff-overlay');
+            const btnCloseOverlay = document.getElementById('btn-close-overlay');
+            const btnViewSplit = document.getElementById('btn-view-split');
+            const btnViewUnified = document.getElementById('btn-view-unified');
+            const btnCopyDiff = document.getElementById('btn-copy-diff');
+            const diffRenderTarget = document.getElementById('diff-render-target');
+
+            let currentViewMode = 'split';
+            let alignedRows = [];
+
+            function escapeHtml(text) {
+                if (text == null) return '';
+                return text.toString()
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function renderWords(words, mode) {
+                let html = '';
+                for (const token of words) {
+                    const v = escapeHtml(token.value);
+                    if (mode === 'left') {
+                        if (token.added) continue;
+                        html += token.removed ? `<span class="word-removed">${v}</span>` : v;
+                    } else {
+                        if (token.removed) continue;
+                        html += token.added ? `<span class="word-added">${v}</span>` : v;
+                    }
+                }
+                return html || ' ';
+            }
+
+            function countWords(text) {
+                const trimmed = text.trim();
+                if (trimmed === '') return 0;
+                return trimmed.split(/\s+/).length;
+            }
+
+            function updateStats() {
+                const origText = textOriginal.value;
+                const modText = textModified.value;
+                originalStats.textContent = `${origText.length.toLocaleString()} chars · ${countWords(origText).toLocaleString()} words`;
+                modifiedStats.textContent = `${modText.length.toLocaleString()} chars · ${countWords(modText).toLocaleString()} words`;
+            }
+
+            textOriginal.addEventListener('input', updateStats);
+            textModified.addEventListener('input', updateStats);
+
+            btnSwap.addEventListener('click', () => {
+                const temp = textOriginal.value;
+                textOriginal.value = textModified.value;
+                textModified.value = temp;
+                updateStats();
+            });
+
+            btnClear.addEventListener('click', () => {
+                if (confirm('Clear both editors?')) {
+                    textOriginal.value = '';
+                    textModified.value = '';
+                    updateStats();
+                }
+            });
+
+            function computeDiffData() {
+                const diffParts = Diff.diffLines(textOriginal.value, textModified.value);
+                alignedRows = [];
+
+                const blocks = [];
+                for (const part of diffParts) {
+                    const lines = part.value.split('\n');
+                    if (part.value.endsWith('\n') && lines[lines.length - 1] === '') lines.pop();
+                    blocks.push({
+                        type: part.added ? 'added' : (part.removed ? 'removed' : 'unchanged'),
+                        lines
+                    });
+                }
+
+                let leftNum = 1, rightNum = 1, idx = 0;
+                while (idx < blocks.length) {
+                    const cur = blocks[idx];
+                    if (cur.type === 'unchanged') {
+                        for (const line of cur.lines) {
+                            alignedRows.push({
+                                left: { lineNum: leftNum++, text: line, type: 'unchanged' },
+                                right: { lineNum: rightNum++, text: line, type: 'unchanged' }
+                            });
+                        }
+                        idx++;
+                    } else if (cur.type === 'removed' && idx + 1 < blocks.length && blocks[idx + 1].type === 'added') {
+                        const rem = cur, add = blocks[idx + 1];
+                        const max = Math.max(rem.lines.length, add.lines.length);
+                        for (let j = 0; j < max; j++) {
+                            let left = { lineNum: null, text: '', type: 'empty' };
+                            let right = { lineNum: null, text: '', type: 'empty' };
+                            if (j < rem.lines.length) {
+                                left = { lineNum: leftNum++, text: rem.lines[j], type: 'removed' };
+                            }
+                            if (j < add.lines.length) {
+                                right = { lineNum: rightNum++, text: add.lines[j], type: 'added' };
+                            }
+                            if (j < rem.lines.length && j < add.lines.length) {
+                                const wd = Diff.diffWords(left.text, right.text);
+                                left.words = wd; right.words = wd;
+                            }
+                            alignedRows.push({ left, right });
+                        }
+                        idx += 2;
+                    } else if (cur.type === 'removed') {
+                        for (const line of cur.lines) {
+                            alignedRows.push({
+                                left: { lineNum: leftNum++, text: line, type: 'removed' },
+                                right: { lineNum: null, text: '', type: 'empty' }
+                            });
+                        }
+                        idx++;
+                    } else {
+                        for (const line of cur.lines) {
+                            alignedRows.push({
+                                left: { lineNum: null, text: '', type: 'empty' },
+                                right: { lineNum: rightNum++, text: line, type: 'added' }
+                            });
+                        }
+                        idx++;
+                    }
+                }
+            }
+
+            function renderSplitView() {
+                let html = `<table class="diff-table"><thead><tr>
+                    <th class="col-num">ln</th><th>original</th>
+                    <th class="col-num">ln</th><th>modified</th>
+                </tr></thead><tbody>`;
+
+                for (const row of alignedRows) {
+                    const L = row.left, R = row.right;
+                    let lc = 'line-unchanged', rc = 'line-unchanged';
+                    if (L.type === 'removed') lc = 'line-removed';
+                    else if (L.type === 'empty') lc = 'line-empty';
+                    if (R.type === 'added') rc = 'line-added';
+                    else if (R.type === 'empty') rc = 'line-empty';
+
+                    let lContent = '';
+                    if (L.type === 'removed') lContent = L.words ? renderWords(L.words, 'left') : escapeHtml(L.text);
+                    else if (L.type === 'unchanged') lContent = escapeHtml(L.text);
+                    if (!lContent && L.type !== 'empty') lContent = ' ';
+
+                    let rContent = '';
+                    if (R.type === 'added') rContent = R.words ? renderWords(R.words, 'right') : escapeHtml(R.text);
+                    else if (R.type === 'unchanged') rContent = escapeHtml(R.text);
+                    if (!rContent && R.type !== 'empty') rContent = ' ';
+
+                    html += `<tr>
+                        <td class="line-num ${lc}">${L.lineNum ?? ''}</td>
+                        <td class="${lc}"><pre style="margin:0;white-space:pre-wrap;">${lContent}</pre></td>
+                        <td class="line-num ${rc}">${R.lineNum ?? ''}</td>
+                        <td class="${rc}"><pre style="margin:0;white-space:pre-wrap;">${rContent}</pre></td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+                diffRenderTarget.innerHTML = html;
+            }
+
+            function renderUnifiedView() {
+                let html = `<table class="diff-table"><thead><tr>
+                    <th class="col-num">old</th><th class="col-num">new</th><th>content</th>
+                </tr></thead><tbody>`;
+
+                for (const row of alignedRows) {
+                    const L = row.left, R = row.right;
+                    if (L.type === 'unchanged' && R.type === 'unchanged') {
+                        html += `<tr class="line-unchanged">
+                            <td class="line-num">${L.lineNum}</td>
+                            <td class="line-num">${R.lineNum}</td>
+                            <td><pre style="margin:0;white-space:pre-wrap;">  ${escapeHtml(L.text)}</pre></td>
+                        </tr>`;
+                    } else if (L.type === 'removed' && R.type === 'added') {
+                        const lc = L.words ? renderWords(L.words, 'left') : escapeHtml(L.text);
+                        html += `<tr class="line-removed">
+                            <td class="line-num">${L.lineNum}</td><td class="line-num"></td>
+                            <td><pre style="margin:0;white-space:pre-wrap;">- ${lc || ' '}</pre></td>
+                        </tr>`;
+                        const rc = R.words ? renderWords(R.words, 'right') : escapeHtml(R.text);
+                        html += `<tr class="line-added">
+                            <td class="line-num"></td><td class="line-num">${R.lineNum}</td>
+                            <td><pre style="margin:0;white-space:pre-wrap;">+ ${rc || ' '}</pre></td>
+                        </tr>`;
+                    } else if (L.type === 'removed') {
+                        html += `<tr class="line-removed">
+                            <td class="line-num">${L.lineNum}</td><td class="line-num"></td>
+                            <td><pre style="margin:0;white-space:pre-wrap;">- ${escapeHtml(L.text) || ' '}</pre></td>
+                        </tr>`;
+                    } else if (R.type === 'added') {
+                        html += `<tr class="line-added">
+                            <td class="line-num"></td><td class="line-num">${R.lineNum}</td>
+                            <td><pre style="margin:0;white-space:pre-wrap;">+ ${escapeHtml(R.text) || ' '}</pre></td>
+                        </tr>`;
+                    }
+                }
+                html += '</tbody></table>';
+                diffRenderTarget.innerHTML = html;
+            }
+
+            function updateDisplay() {
+                if (currentViewMode === 'split') {
+                    btnViewSplit.classList.add('active');
+                    btnViewUnified.classList.remove('active');
+                    renderSplitView();
+                } else {
+                    btnViewSplit.classList.remove('active');
+                    btnViewUnified.classList.add('active');
+                    renderUnifiedView();
+                }
+            }
+
+            btnViewSplit.addEventListener('click', () => { currentViewMode = 'split'; updateDisplay(); });
+            btnViewUnified.addEventListener('click', () => { currentViewMode = 'unified'; updateDisplay(); });
+
+            function openOverlay() {
+                computeDiffData();
+                updateDisplay();
+                diffOverlay.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                btnCloseOverlay.focus();
+            }
+
+            function closeOverlay() {
+                diffOverlay.style.display = 'none';
+                document.body.style.overflow = '';
+                btnViewDiff.focus();
+            }
+
+            btnViewDiff.addEventListener('click', openOverlay);
+            btnCloseOverlay.addEventListener('click', closeOverlay);
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && diffOverlay.style.display === 'flex') closeOverlay();
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    diffOverlay.style.display === 'flex' ? closeOverlay() : openOverlay();
+                }
+            });
+
+            btnCopyDiff.addEventListener('click', () => {
+                let text = '--- original\n+++ modified\n';
+                for (const row of alignedRows) {
+                    const L = row.left, R = row.right;
+                    if (L.type === 'unchanged' && R.type === 'unchanged') text += ` ${L.text}\n`;
+                    else if (L.type === 'removed' && R.type === 'added') { text += `-${L.text}\n+${R.text}\n`; }
+                    else if (L.type === 'removed') text += `-${L.text}\n`;
+                    else if (R.type === 'added') text += `+${R.text}\n`;
+                }
+                navigator.clipboard.writeText(text).then(() => {
+                    const orig = btnCopyDiff.textContent;
+                    btnCopyDiff.textContent = 'copied';
+                    setTimeout(() => { btnCopyDiff.textContent = orig; }, 1500);
+                });
+            });
+
+            updateStats();
+        });
+    </script>
+</body>
+</html>
