@@ -97,6 +97,48 @@
             outline-offset: 2px;
         }
 
+        /* CLEAR BUTTON — EXPAND-TO-CONFIRM */
+        #clear-group {
+            display: inline-flex;
+            align-items: center;
+        }
+        #btn-cancel {
+            max-width: 0;
+            padding: 0;
+            border: 0;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.05s ease;
+            white-space: nowrap;
+            margin-left: 0;
+            box-shadow: none;
+            border-color: var(--fg);
+            color: var(--fg);
+        }
+        #btn-cancel:hover {
+            background: var(--fg);
+            color: var(--bg);
+        }
+        #clear-group.expanded #btn-cancel {
+            max-width: 80px;
+            padding: 0.25rem 0.6rem;
+            border: var(--bw) solid var(--fg);
+            opacity: 1;
+            pointer-events: auto;
+            margin-left: 0.4rem;
+            box-shadow: 2px 2px 0 var(--fg);
+        }
+        #clear-group.expanded #btn-clear {
+            border-color: #cc3333;
+            color: #cc3333;
+            box-shadow: 2px 2px 0 #cc3333;
+        }
+        #clear-group.expanded #btn-clear:hover {
+            background: #cc3333;
+            color: var(--fg);
+        }
+
         /* MAIN */
         main {
             flex: 1;
@@ -423,7 +465,10 @@
         </div>
         <div>
             <button id="btn-swap">Swap</button>
-            <button id="btn-clear">Clear</button>
+            <span id="clear-group">
+                <button id="btn-clear">Clear</button>
+                <button id="btn-cancel">Cancel</button>
+            </span>
         </div>
     </header>
 
@@ -483,6 +528,8 @@
             const btnViewDiff = document.getElementById('btn-view-diff');
             const btnSwap = document.getElementById('btn-swap');
             const btnClear = document.getElementById('btn-clear');
+            const btnCancel = document.getElementById('btn-cancel');
+            const clearGroup = document.getElementById('clear-group');
 
             const diffOverlay = document.getElementById('diff-overlay');
             const btnCloseOverlay = document.getElementById('btn-close-overlay');
@@ -540,11 +587,30 @@
                 updateStats();
             });
 
-            btnClear.addEventListener('click', () => {
-                if (confirm('Clear both editors?')) {
+            btnClear.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!clearGroup.classList.contains('expanded')) {
+                    clearGroup.classList.add('expanded');
+                    btnClear.textContent = 'Confirm?';
+                } else {
+                    clearGroup.classList.remove('expanded');
+                    btnClear.textContent = 'Clear';
                     textOriginal.value = '';
                     textModified.value = '';
                     updateStats();
+                }
+            });
+
+            btnCancel.addEventListener('click', (e) => {
+                e.stopPropagation();
+                clearGroup.classList.remove('expanded');
+                btnClear.textContent = 'Clear';
+            });
+
+            document.addEventListener('click', (e) => {
+                if (clearGroup.classList.contains('expanded') && !clearGroup.contains(e.target)) {
+                    clearGroup.classList.remove('expanded');
+                    btnClear.textContent = 'Clear';
                 }
             });
 
