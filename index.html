@@ -194,6 +194,7 @@
         .pane-textarea-wrapper {
             flex: 1;
             display: flex;
+            position: relative;
         }
 
         textarea {
@@ -217,6 +218,49 @@
 
         .editor-pane:focus-within {
             border-color: var(--fg);
+        }
+
+        .editor-pane.drag-over {
+            border-color: var(--fg);
+            border-style: dashed;
+        }
+
+        /* Drop overlay inside each pane */
+        .drop-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.82);
+            border: 2px dashed var(--border-dim);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.12s ease;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            text-transform: uppercase;
+        }
+
+        .drop-overlay.active {
+            opacity: 1;
+            border-color: var(--fg);
+        }
+
+        .drop-overlay-icon {
+            font-size: 1.4rem;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            color: var(--fg);
+            margin-bottom: 0.15rem;
+        }
+
+        .drop-overlay-hint {
+            font-size: 0.65rem;
+            color: var(--muted);
+            letter-spacing: 0.1em;
+            margin-top: 0.3rem;
         }
 
         /* VIEW DIFF BUTTON */
@@ -481,6 +525,10 @@
                 </div>
                 <div class="pane-textarea-wrapper">
                     <textarea id="text-original" placeholder="paste original text..."></textarea>
+                    <div class="drop-overlay">
+                        <div class="drop-overlay-icon">+</div>
+                        <div class="drop-overlay-hint">drop file</div>
+                    </div>
                 </div>
             </div>
 
@@ -491,6 +539,10 @@
                 </div>
                 <div class="pane-textarea-wrapper">
                     <textarea id="text-modified" placeholder="paste modified text..."></textarea>
+                    <div class="drop-overlay">
+                        <div class="drop-overlay-icon">+</div>
+                        <div class="drop-overlay-hint">drop file</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -579,6 +631,72 @@
 
             textOriginal.addEventListener('input', updateStats);
             textModified.addEventListener('input', updateStats);
+
+            /* DRAG & DROP — per-pane file loading */
+            const panes = [
+                {
+                    el: document.getElementById('pane-original'),
+                    textarea: textOriginal,
+                    overlay: document.querySelector('#pane-original .drop-overlay')
+                },
+                {
+                    el: document.getElementById('pane-modified'),
+                    textarea: textModified,
+                    overlay: document.querySelector('#pane-modified .drop-overlay')
+                }
+            ];
+
+            panes.forEach(({ el, textarea, overlay }) => {
+
+                el.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!el.contains(e.relatedTarget)) {
+                        el.classList.add('drag-over');
+                        overlay.classList.add('active');
+                    }
+                });
+
+                el.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                el.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!el.contains(e.relatedTarget)) {
+                        el.classList.remove('drag-over');
+                        overlay.classList.remove('active');
+                    }
+                });
+
+                el.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    el.classList.remove('drag-over');
+                    overlay.classList.remove('active');
+
+                    const files = e.dataTransfer.files;
+                    if (files.length === 0) return;
+
+                    const file = files[0];
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        textarea.value = ev.target.result;
+                        updateStats();
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            /* Safety net: any dragend anywhere resets all pane states */
+            document.addEventListener('dragend', () => {
+                panes.forEach(({ el, overlay }) => {
+                    el.classList.remove('drag-over');
+                    overlay.classList.remove('active');
+                });
+            });
 
             btnSwap.addEventListener('click', () => {
                 const temp = textOriginal.value;

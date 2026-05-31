@@ -7,6 +7,7 @@ A minimal, brutalist, client-side text diff viewer. Paste two bodies of text sid
 ## Features
 
 - **Side-by-side text editors** — paste original and modified text into two panes
+- **Drag & drop file loading** — drop a text file onto either pane to load its content
 - **Fullscreen diff overlay** — opens a dedicated viewport with split or unified diff views
 - **Line-level + word-level diffing** — whole lines are highlighted as added/removed, and individual changed words are highlighted inline
 - **Split / Unified toggle** — switch between side-by-side and unified patch-style layout
@@ -21,7 +22,7 @@ A minimal, brutalist, client-side text diff viewer. Paste two bodies of text sid
 ## Usage
 
 1. Open `index.html` in any modern browser
-2. Paste your original text in the left pane and the modified text in the right pane
+2. Paste your original text in the left pane and the modified text in the right pane (or drag & drop a text file onto either pane)
 3. Click **view diff** (or press `Ctrl+Enter`)
 4. Toggle between **split** and **unified** views in the overlay
 5. Hit **Esc** or click **close** to return
