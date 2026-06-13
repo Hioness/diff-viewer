@@ -2,6 +2,8 @@
 
 A minimal, brutalist, client-side text diff viewer. Paste two bodies of text side-by-side and see exactly what changed — line by line, word by word.
 
+**→ [Try it live](https://diff-viewer-two.vercel.app/)**
+
 ![screenshot](./screenshot.png)
 
 ## Features
